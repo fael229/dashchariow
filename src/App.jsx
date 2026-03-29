@@ -762,8 +762,47 @@ function LogsPage({ logs, onRefresh }) {
   );
 }
 
+// === LOGIN PAGE ===
+function LoginPage({ onLogin }) {
+  const [pwd, setPwd] = useState('');
+  const [err, setErr] = useState('');
+  // Configurable via Render / Vercel Environment Variables
+  const ACTUAL_PWD = import.meta.env.VITE_DASHBOARD_PASSWORD || 'admin123';
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (pwd === ACTUAL_PWD) {
+      onLogin();
+    } else {
+      setErr('Mot de passe incorrect');
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-dark)' }}>
+      <div className="card" style={{ maxWidth: 400, width: '90%', padding: 32, textAlign: 'center' }}>
+        <h2 style={{ marginBottom: 8 }}>🔒 Accès Restreint</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Veuillez entrer le mot de passe pour accéder au Dashboard ChariBot.</p>
+        <form onSubmit={submit}>
+          <input 
+            type="password" 
+            value={pwd} 
+            onChange={e=>setPwd(e.target.value)} 
+            className="form-input" 
+            placeholder="Mot de passe" 
+            style={{ marginBottom: 16 }} 
+          />
+          {err && <p style={{color: 'var(--accent-red)', marginBottom: 16, fontSize: 14}}>{err}</p>}
+          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>Se connecter</button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // === MAIN APP ===
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [page, setPage] = useState('dashboard');
   const [status, setStatus] = useState('disconnected');
   const [stats, setStats] = useState({});
@@ -848,6 +887,19 @@ export default function App() {
       showToast('❌ Impossible de contacter le serveur', 'error');
     }
   };
+
+  useEffect(() => {
+    if (localStorage.getItem('chariow_auth') === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={() => {
+      localStorage.setItem('chariow_auth', 'true');
+      setIsAuthenticated(true);
+    }} />;
+  }
 
   return (
     <div className="app">
