@@ -42,7 +42,9 @@ function Toast({ message, type, onClose }) {
 function Sidebar({ page, setPage, status }) {
   const nav = [
     { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
+    { id: 'analytics', icon: '📈', label: 'Analytics' },
     { id: 'messages', icon: '💬', label: 'Messages' },
+    { id: 'product_messages', icon: '🎁', label: 'Produits (Nouveau)' },
     { id: 'media', icon: '📸', label: 'Médias' },
     { id: 'logs', icon: '📋', label: 'Logs' },
   ];
@@ -223,6 +225,133 @@ function DashboardPage({ status, stats, phone, qr, onRestart, onDeleteSession, t
               POST /webhook/chariow
             </code>
             <p style={{ marginTop: 16 }}>5. Suivez les envois dans l'onglet <strong style={{color:'var(--text-primary)'}}>📋 Logs</strong></p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// === ANALYTICS PAGE ===
+function AnalyticsPage() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      let query = '';
+      if (dateRange === 'today') {
+        const today = new Date().toISOString().split('T')[0];
+        query = `?start=${today}&end=${today}`;
+      } else if (dateRange === '7d' || dateRange === '30d') {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - (dateRange === '7d' ? 7 : 30));
+        query = `?start=${start.toISOString().split('T')[0]}&end=${end.toISOString().split('T')[0]}`;
+      } else if (dateRange === 'custom' && customStart && customEnd) {
+        query = `?start=${customStart}&end=${customEnd}`;
+      }
+
+      const res = await api(`/api/analytics${query}`);
+      if (res.success) setData(res.analytics);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { 
+    if (dateRange !== 'custom') fetchAnalytics(); 
+  }, [dateRange]);
+
+  if (loading && !data) return <div style={{ padding: 40, textAlign: 'center' }}>⏳ Chargement des données...</div>;
+  if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>Aucune donnée disponible.</div>;
+
+  const { chariow, facebook, roas, roi_net } = data;
+
+  return (
+    <>
+      <div className="page-header" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <h2>Analytics (Tracker ROAS)</h2>
+            <p>Synchronisation en direct avec Chariow et Facebook Ads</p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="form-control" style={{ width: 'auto', padding: '6px 12px' }} value={dateRange} onChange={e => setDateRange(e.target.value)}>
+              <option value="today">Aujourd'hui</option>
+              <option value="all">Tout le temps</option>
+              <option value="7d">7 derniers jours</option>
+              <option value="30d">30 derniers jours</option>
+              <option value="custom">Personnalisé...</option>
+            </select>
+            
+            {dateRange === 'custom' && (
+              <>
+                <input type="date" className="form-control" style={{ width: 'auto', padding: '5px' }} value={customStart} onChange={e => setCustomStart(e.target.value)} />
+                <span style={{color: 'var(--text-secondary)'}}>au</span>
+                <input type="date" className="form-control" style={{ width: 'auto', padding: '5px' }} value={customEnd} onChange={e => setCustomEnd(e.target.value)} />
+              </>
+            )}
+            
+            <button className="btn btn-secondary btn-sm" onClick={fetchAnalytics} disabled={loading}>
+              {loading ? '⏳' : '🔄 Actualiser'}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
+        <div className="stat-card" style={{ borderTop: '3px solid #00f2fe' }}>
+          <div className="stat-icon" style={{ background: '#00f2fe22' }}>💰</div>
+          <div>
+            <div className="stat-value">{chariow.revenue.toLocaleString()} {chariow.currency}</div>
+            <div className="stat-label">Chiffre d'Affaires Brut</div>
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderTop: '3px solid #ff4b2b' }}>
+          <div className="stat-icon" style={{ background: '#ff4b2b22' }}>💸</div>
+          <div>
+            <div className="stat-value">{facebook.spend.toLocaleString()} {chariow.currency}</div>
+            <div className="stat-label">Dépense (Facebook Ads)</div>
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderTop: '3px solid #f9d423' }}>
+          <div className="stat-icon" style={{ background: '#f9d42322' }}>🚀</div>
+          <div>
+            <div className="stat-value" style={{ color: roas >= 2 ? '#4caf50' : 'inherit' }}>x{roas}</div>
+            <div className="stat-label">Vrai ROAS (Retour)</div>
+          </div>
+        </div>
+        <div className="stat-card" style={{ borderTop: '3px solid #4facfe' }}>
+          <div className="stat-icon" style={{ background: '#4facfe22' }}>💎</div>
+          <div>
+            <div className="stat-value" style={{ color: roi_net > 0 ? '#4caf50' : '#f44336' }}>
+              {roi_net > 0 ? '+' : ''}{roi_net.toLocaleString()} {chariow.currency}
+            </div>
+            <div className="stat-label">Profit Net Estimé</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header"><div className="card-title">🛍️ Chariow Stats</div></div>
+          <div style={{ lineHeight: 2, fontSize: 14 }}>
+            <p><strong>Ventes Totales :</strong> <span style={{ float: 'right', fontWeight: 600 }}>{chariow.sales} commandes</span></p>
+            <p><strong>Panier Moyen :</strong> <span style={{ float: 'right', fontWeight: 600 }}>{chariow.sales > 0 ? Math.round(chariow.revenue / chariow.sales).toLocaleString() : 0} {chariow.currency}</span></p>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><div className="card-title">🎯 Facebook Ads Stats</div></div>
+          <div style={{ lineHeight: 2, fontSize: 14 }}>
+            <p><strong>Impressions :</strong> <span style={{ float: 'right', fontWeight: 600 }}>{facebook.impressions.toLocaleString()} vues</span></p>
+            <p><strong>Clics :</strong> <span style={{ float: 'right', fontWeight: 600 }}>{facebook.clicks.toLocaleString()} visiteurs</span></p>
+            <p><strong>Coût Par Clic (CPC) :</strong> <span style={{ float: 'right', fontWeight: 600 }}>{facebook.clicks > 0 ? (facebook.spend / facebook.clicks).toFixed(2) : 0} {chariow.currency}</span></p>
           </div>
         </div>
       </div>
@@ -415,6 +544,171 @@ function MediaPage({ config, onSave, toast }) {
   );
 }
 
+// === PRODUCT MESSAGES PAGE ===
+function ProductMessagesPage({ config, onSave, toast }) {
+  const [products, setProducts] = useState({});
+  const [companyName, setCompanyName] = useState('');
+  const [newProductName, setNewProductName] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setProducts(config.product_messages || {});
+      setCompanyName(config.branding?.company_name || '');
+    }
+  }, [config]);
+
+  const handleAddProduct = () => {
+    if (!newProductName.trim()) return;
+    const name = newProductName.trim();
+    if (products[name]) {
+      toast("Un message pour ce produit existe déjà", "error");
+      return;
+    }
+    const updated = {
+      ...products,
+      [name]: { text: '', image_url: '', audio_url: '' }
+    };
+    setProducts(updated);
+    setSelectedProduct(name);
+    setNewProductName('');
+  };
+
+  const handleDeleteProduct = (name) => {
+    const updated = { ...products };
+    delete updated[name];
+    setProducts(updated);
+    if (selectedProduct === name) setSelectedProduct(null);
+  };
+
+  const updateSelectedProduct = (field, value) => {
+    setProducts({
+      ...products,
+      [selectedProduct]: {
+        ...products[selectedProduct],
+        [field]: value
+      }
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({ product_messages: products });
+    setSaving(false);
+  };
+
+  const preview = (template) => {
+    return (template || '')
+      .replace(/{prenom}/g, 'Amina')
+      .replace(/{nom}/g, 'Koné')
+      .replace(/{email}/g, 'amina@gmail.com')
+      .replace(/{produit}/g, selectedProduct || 'Le Produit')
+      .replace(/{montant}/g, '25 000 FCFA')
+      .replace(/{entreprise}/g, companyName || 'Mon Entreprise');
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>Messages par Produit</h2>
+        <p>Définissez un texte ou une note vocale spécifique selon l'article acheté</p>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">Vos produits</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <input 
+            className="form-input" 
+            placeholder="Nom EXACT du produit sur Chariow (respectez les majuscules)" 
+            value={newProductName}
+            onChange={e => setNewProductName(e.target.value)}
+          />
+          <button className="btn btn-secondary" onClick={handleAddProduct}>+ Ajouter au bot</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {Object.keys(products).length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun produit personnalisé pour le moment.</p>}
+          {Object.keys(products).map(p => (
+            <div 
+              key={p} 
+              style={{
+                padding: '8px 12px', 
+                background: selectedProduct === p ? 'var(--accent-blue)' : 'var(--bg-lighter)',
+                color: selectedProduct === p ? '#fff' : 'inherit',
+                borderRadius: 8,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'all 0.2s'
+              }}
+              onClick={() => setSelectedProduct(p)}
+            >
+              {p}
+              <button onClick={(e) => { e.stopPropagation(); handleDeleteProduct(p); }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.7 }}>✖</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {selectedProduct && products[selectedProduct] && (
+        <div className="grid-2" style={{ marginTop: 16 }}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">Message pour: {selectedProduct}</div>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Texte du message</label>
+              <textarea className="form-textarea" rows="8"
+                value={products[selectedProduct].text || ''} 
+                onChange={e => updateSelectedProduct('text', e.target.value)}
+                placeholder="Utilisez {prenom}, {produit}, {montant}, {email}, {entreprise}..." />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">URL Image (Optionnel)</label>
+              <input className="form-input" 
+                value={products[selectedProduct].image_url || ''} 
+                onChange={e => updateSelectedProduct('image_url', e.target.value)} 
+                placeholder="Lien de l'image (Catbox.moe)" />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">URL Audio (Optionnel)</label>
+              <input className="form-input" 
+                value={products[selectedProduct].audio_url || ''} 
+                onChange={e => updateSelectedProduct('audio_url', e.target.value)} 
+                placeholder="Lien de la note vocale (Catbox.moe ogg)" />
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header"><div className="card-title">Aperçu pour le client</div></div>
+            <div className="msg-preview">{preview(products[selectedProduct].text)}</div>
+            
+            {products[selectedProduct].image_url && (
+              <img src={products[selectedProduct].image_url} alt="img preview" style={{ maxWidth: '100%', borderRadius: 8, marginTop: 12 }} onError={e => e.target.style.display='none'} />
+            )}
+            {products[selectedProduct].audio_url && (
+              <audio controls src={products[selectedProduct].audio_url} style={{ width: '100%', marginTop: 12 }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 16 }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? '⏳ Enregistrement...' : '💾 Sauvegarder les produits'}
+        </button>
+      </div>
+    </>
+  );
+}
+
 // === LOGS PAGE ===
 function LogsPage({ logs, onRefresh }) {
   return (
@@ -563,8 +857,12 @@ export default function App() {
           <DashboardPage status={status} stats={stats} phone={phone} qr={qr}
             onRestart={handleRestart} onDeleteSession={handleDeleteSession} toast={showToast} />
         )}
+        {page === 'analytics' && <AnalyticsPage />}
         {page === 'messages' && (
           <MessagesPage config={config} onSave={handleSaveConfig} toast={showToast} />
+        )}
+        {page === 'product_messages' && (
+          <ProductMessagesPage config={config} onSave={handleSaveConfig} toast={showToast} />
         )}
         {page === 'media' && (
           <MediaPage config={config} onSave={handleSaveConfig} toast={showToast} />

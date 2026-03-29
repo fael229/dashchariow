@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Toutes les routes API → Bot-Hosting
       '/api': {
         target: 'http://fi6.bot-hosting.net:22232',
         changeOrigin: true,
@@ -19,4 +20,3 @@ export default defineConfig({
     }
   }
 })
-
