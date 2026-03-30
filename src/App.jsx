@@ -45,6 +45,7 @@ function Sidebar({ page, setPage, status }) {
     { id: 'analytics', icon: '📈', label: 'Analytics' },
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'product_messages', icon: '🎁', label: 'Produits (Nouveau)' },
+    { id: 'agent_ia', icon: '🤖', label: 'Agent IA' },
     { id: 'media', icon: '📸', label: 'Médias' },
     { id: 'logs', icon: '📋', label: 'Logs' },
   ];
@@ -762,6 +763,169 @@ function LogsPage({ logs, onRefresh }) {
   );
 }
 
+// === AGENT IA PAGE ===
+function AgentIAPage({ config, onSave }) {
+  const [enabled, setEnabled] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [knowledge, setKnowledge] = useState([]);
+  const [newQ, setNewQ] = useState('');
+  const [newA, setNewA] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [selectedConv, setSelectedConv] = useState(null);
+
+  useEffect(() => {
+    if (config?.ai_agent) {
+      setEnabled(config.ai_agent.enabled || false);
+      setApiKey(config.ai_agent.api_key || '');
+      setSystemPrompt(config.ai_agent.system_prompt || '');
+      setKnowledge(config.ai_agent.knowledge_base || []);
+    }
+    // Fetch conversation history
+    api('/api/ai-conversations').then(d => setConversations(d.conversations || [])).catch(() => {});
+  }, [config]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      ai_agent: { enabled, api_key: apiKey, system_prompt: systemPrompt, knowledge_base: knowledge }
+    });
+    setSaving(false);
+  };
+
+  const addKnowledge = () => {
+    if (!newQ.trim() || !newA.trim()) return;
+    setKnowledge([...knowledge, { question: newQ.trim(), answer: newA.trim() }]);
+    setNewQ(''); setNewA('');
+  };
+
+  const deleteKnowledge = (i) => setKnowledge(knowledge.filter((_, idx) => idx !== i));
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>Agent IA 🤖</h2>
+        <p>Configurez l'IA qui répond automatiquement à vos clients WhatsApp</p>
+      </div>
+
+      {/* SECTION 1 : Activation */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Activation</div>
+        </div>
+        <div className="toggle-row">
+          <span style={{ fontSize: 14 }}>
+            {enabled ? '✅ Agent IA activé — l\'IA répond automatiquement' : '❌ Agent IA désactivé — aucun message automatique'}
+          </span>
+          <button className={`toggle ${enabled ? 'active' : ''}`} onClick={() => setEnabled(!enabled)} />
+        </div>
+        {enabled && (
+          <p style={{ color: 'var(--accent-orange)', fontSize: 12, marginTop: 8 }}>
+            ⚠️ L'IA répondra à TOUS les messages entrants. Ajoutez une base de connaissances pour guider ses réponses.
+          </p>
+        )}
+      </div>
+
+      {/* SECTION 2 : Clé API Gemini */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">🔑 Clé API Google Gemini (Gratuit)</div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Obtenez votre clé gratuite sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{color:'var(--accent-blue)'}}>aistudio.google.com/apikey</a></label>
+          <input className="form-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+            placeholder="AIza..." />
+        </div>
+      </div>
+
+      {/* SECTION 3 : Prompt système */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">🧠 Personnaliété de l'IA (System Prompt)</div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Décrivez ici le rôle, le ton et les instructions de l'agent</label>
+          <textarea className="form-textarea" rows="6" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
+            placeholder={`Exemple:\nTu es Sara, l'assistante commerciale d'Elite Digital Academy. Tu réponds en français, de façon chaleureuse et professionnelle.\nTu aide les clients à compléter leurs achats et tu réponds à leurs questions sur les formations.`} />
+        </div>
+      </div>
+
+      {/* SECTION 4 : Base de connaissances */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">📚 Base de Connaissances (FAQ)</div>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>L'IA utilisera ces réponses pour répondre aux questions fréquentes.</p>
+
+        {knowledge.map((item, i) => (
+          <div key={i} style={{ background: 'var(--bg-lighter)', borderRadius: 8, padding: '10px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ fontSize: 13 }}>
+              <div style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Q: {item.question}</div>
+              <div style={{ marginTop: 4 }}>R: {item.answer}</div>
+            </div>
+            <button onClick={() => deleteKnowledge(i)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+          </div>
+        ))}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          <input className="form-input" placeholder="Question (ex: Quel est le prix du pack?)" value={newQ} onChange={e => setNewQ(e.target.value)} />
+          <input className="form-input" placeholder="Réponse de l'IA" value={newA} onChange={e => setNewA(e.target.value)} />
+          <button className="btn btn-secondary" onClick={addKnowledge} style={{ alignSelf: 'flex-start' }}>+ Ajouter</button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? '⏳ Enregistrement...' : '💾 Sauvegarder l\'agent IA'}
+        </button>
+      </div>
+
+      {/* SECTION 5 : Conversations en cours */}
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">💬 Conversations en cours</div>
+          <button className="btn btn-secondary btn-sm" onClick={() => api('/api/ai-conversations').then(d => setConversations(d.conversations || []))}>Actualiser</button>
+        </div>
+        {conversations.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>Aucune conversation active pour le moment.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {conversations.map(conv => (
+              <div key={conv.jid}
+                onClick={() => setSelectedConv(selectedConv?.jid === conv.jid ? null : conv)}
+                style={{ padding: '8px 14px', background: selectedConv?.jid === conv.jid ? 'var(--accent-blue)' : 'var(--bg-lighter)', color: selectedConv?.jid === conv.jid ? '#fff' : 'inherit', borderRadius: 8, cursor: 'pointer' }}>
+                📱 {conv.phone} ({conv.messages.length} msgs)
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedConv && (
+          <div style={{ marginTop: 16, maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {selectedConv.messages.map((m, i) => (
+              <div key={i} style={{
+                textAlign: m.role === 'user' ? 'left' : 'right',
+                padding: '8px 12px',
+                background: m.role === 'user' ? 'var(--bg-lighter)' : 'rgba(59,130,246,0.15)',
+                borderRadius: 10,
+                maxWidth: '80%',
+                alignSelf: m.role === 'user' ? 'flex-start' : 'flex-end',
+                fontSize: 13
+              }}>
+                <div style={{ fontWeight: 600, fontSize: 11, marginBottom: 3, color: 'var(--text-muted)' }}>
+                  {m.role === 'user' ? '👤 Client' : '🤖 Agent IA'}
+                </div>
+                {m.parts[0].text}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // === LOGIN PAGE ===
 function LoginPage({ onLogin }) {
   const [pwd, setPwd] = useState('');
@@ -915,6 +1079,9 @@ export default function App() {
         )}
         {page === 'product_messages' && (
           <ProductMessagesPage config={config} onSave={handleSaveConfig} toast={showToast} />
+        )}
+        {page === 'agent_ia' && (
+          <AgentIAPage config={config} onSave={handleSaveConfig} />
         )}
         {page === 'media' && (
           <MediaPage config={config} onSave={handleSaveConfig} toast={showToast} />
