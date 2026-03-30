@@ -768,6 +768,7 @@ function AgentIAPage({ config, onSave }) {
   const [tab, setTab] = useState('config');
   const [enabled, setEnabled] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [knowledge, setKnowledge] = useState([]);
   const [newQ, setNewQ] = useState('');
@@ -916,9 +917,31 @@ function AgentIAPage({ config, onSave }) {
 
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header"><div className="card-title">🔑 Clé API Gemini (Gratuit)</div></div>
+            {/* Champ fantôme invisible pour tromper l'autofill du navigateur */}
+            <input type="password" style={{ display: 'none' }} autoComplete="current-password" readOnly />
             <div className="form-group">
               <label className="form-label">→ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>aistudio.google.com/apikey</a></label>
-              <input className="form-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AIza..." />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="form-input"
+                  type={showKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder="AIza..."
+                  autoComplete="off"
+                  name="gemini-api-key"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(v => !v)}
+                  className="btn btn-secondary"
+                  style={{ flexShrink: 0, padding: '0 14px' }}
+                >
+                  {showKey ? '🙈 Masquer' : '👁️ Voir'}
+                </button>
+              </div>
+              {apiKey && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>✅ Clé saisie ({apiKey.length} caractères)</p>}
             </div>
           </div>
 
