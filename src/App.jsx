@@ -916,20 +916,20 @@ function AgentIAPage({ config, onSave }) {
           </div>
 
           <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header"><div className="card-title">🔑 Clé API Gemini (Gratuit)</div></div>
+            <div className="card-header"><div className="card-title">🔑 Clé API Groq (Gratuit - Llama 3)</div></div>
             {/* Champ fantôme invisible pour tromper l'autofill du navigateur */}
             <input type="password" style={{ display: 'none' }} autoComplete="current-password" readOnly />
             <div className="form-group">
-              <label className="form-label">→ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>aistudio.google.com/apikey</a></label>
+              <label className="form-label">→ <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>console.groq.com/keys</a></label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   className="form-input"
                   type={showKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  placeholder="AIza..."
+                  placeholder="gsk_..."
                   autoComplete="off"
-                  name="gemini-api-key"
+                  name="groq-api-key"
                   style={{ flex: 1 }}
                 />
                 <button
