@@ -765,6 +765,7 @@ function LogsPage({ logs, onRefresh }) {
 
 // === AGENT IA PAGE ===
 function AgentIAPage({ config, onSave }) {
+  const [tab, setTab] = useState('config');
   const [enabled, setEnabled] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -772,8 +773,18 @@ function AgentIAPage({ config, onSave }) {
   const [newQ, setNewQ] = useState('');
   const [newA, setNewA] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Training
+  const [trainingExamples, setTrainingExamples] = useState([]);
+  const [waExport, setWaExport] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [manualIn, setManualIn] = useState('');
+  const [manualOut, setManualOut] = useState('');
+
+  // Conversations
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
+  const [learnedIdx, setLearnedIdx] = useState(new Set());
 
   useEffect(() => {
     if (config?.ai_agent) {
@@ -781,16 +792,14 @@ function AgentIAPage({ config, onSave }) {
       setApiKey(config.ai_agent.api_key || '');
       setSystemPrompt(config.ai_agent.system_prompt || '');
       setKnowledge(config.ai_agent.knowledge_base || []);
+      setTrainingExamples(config.ai_agent.training_examples || []);
     }
-    // Fetch conversation history
     api('/api/ai-conversations').then(d => setConversations(d.conversations || [])).catch(() => {});
   }, [config]);
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave({
-      ai_agent: { enabled, api_key: apiKey, system_prompt: systemPrompt, knowledge_base: knowledge }
-    });
+    await onSave({ ai_agent: { enabled, api_key: apiKey, system_prompt: systemPrompt, knowledge_base: knowledge } });
     setSaving(false);
   };
 
@@ -799,129 +808,246 @@ function AgentIAPage({ config, onSave }) {
     setKnowledge([...knowledge, { question: newQ.trim(), answer: newA.trim() }]);
     setNewQ(''); setNewA('');
   };
-
   const deleteKnowledge = (i) => setKnowledge(knowledge.filter((_, idx) => idx !== i));
+
+  // Parse WhatsApp export and extract Q/A pairs (consecutive user→bot)
+  const importWhatsApp = () => {
+    if (!waExport.trim()) return;
+    setImporting(true);
+    // Format: [DD/MM/YYYY, HH:MM:SS] Name: message
+    const lines = waExport.split('\n');
+    const parsed = [];
+    const lineRe = /^\[?\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}[,\s]+\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AP]M)?\]?\s*[-–]?\s*(.+?):\s(.+)$/;
+    lines.forEach(line => {
+      const m = line.match(lineRe);
+      if (m) parsed.push({ name: m[1].trim(), text: m[2].trim() });
+    });
+
+    // Extract consecutive pairs: any msg followed by a msg from a different person
+    const pairs = [];
+    const names = [...new Set(parsed.map(p => p.name))];
+    // Assume the "you" is the name that appears last (or most) — heuristic
+    const meCandidates = names.slice().sort((a, b) =>
+      parsed.filter(p => p.name === b).length - parsed.filter(p => p.name === a).length
+    );
+    const meName = meCandidates[meCandidates.length - 1] || names[1] || '';
+
+    for (let i = 0; i < parsed.length - 1; i++) {
+      if (parsed[i].name !== meName && parsed[i + 1].name === meName) {
+        pairs.push({ input: parsed[i].text, output: parsed[i + 1].text });
+      }
+    }
+
+    // Save valid pairs via API
+    let saved = 0;
+    Promise.all(pairs.map(p =>
+      api('/api/ai-training', { method: 'POST', body: JSON.stringify(p) })
+        .then(r => { if (r.success) saved++; })
+        .catch(() => {})
+    )).then(() => {
+      setWaExport('');
+      setImporting(false);
+      // Reload
+      api('/api/config').then(c => setTrainingExamples(c?.ai_agent?.training_examples || []));
+      alert(`✅ ${saved} échanges importés comme exemples d'entraînement !`);
+    });
+  };
+
+  const addManualExample = () => {
+    if (!manualIn.trim() || !manualOut.trim()) return;
+    api('/api/ai-training', { method: 'POST', body: JSON.stringify({ input: manualIn.trim(), output: manualOut.trim() }) })
+      .then(r => {
+        if (r.success) {
+          setTrainingExamples(prev => [{ input: manualIn.trim(), output: manualOut.trim() }, ...prev]);
+          setManualIn(''); setManualOut('');
+        }
+      });
+  };
+
+  const deleteExample = (i) => {
+    api(`/api/ai-training/${i}`, { method: 'DELETE' }).then(() => {
+      setTrainingExamples(prev => prev.filter((_, idx) => idx !== i));
+    });
+  };
+
+  const learnFromMsg = (userMsg, aiMsg, pairKey) => {
+    api('/api/ai-training', { method: 'POST', body: JSON.stringify({ input: userMsg, output: aiMsg }) })
+      .then(r => {
+        if (r.success) {
+          setLearnedIdx(prev => new Set([...prev, pairKey]));
+          setTrainingExamples(prev => [{ input: userMsg, output: aiMsg }, ...prev]);
+        }
+      });
+  };
+
+  const tabStyle = (t) => ({
+    padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+    background: tab === t ? 'var(--accent-blue)' : 'var(--bg-lighter)',
+    color: tab === t ? '#fff' : 'var(--text-secondary)',
+    border: 'none', transition: 'all 0.2s'
+  });
 
   return (
     <>
       <div className="page-header">
         <h2>Agent IA 🤖</h2>
-        <p>Configurez l'IA qui répond automatiquement à vos clients WhatsApp</p>
+        <p>L'IA apprend de vos vraies conversations pour répondre comme vous</p>
       </div>
 
-      {/* SECTION 1 : Activation */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">Activation</div>
-        </div>
-        <div className="toggle-row">
-          <span style={{ fontSize: 14 }}>
-            {enabled ? '✅ Agent IA activé — l\'IA répond automatiquement' : '❌ Agent IA désactivé — aucun message automatique'}
-          </span>
-          <button className={`toggle ${enabled ? 'active' : ''}`} onClick={() => setEnabled(!enabled)} />
-        </div>
-        {enabled && (
-          <p style={{ color: 'var(--accent-orange)', fontSize: 12, marginTop: 8 }}>
-            ⚠️ L'IA répondra à TOUS les messages entrants. Ajoutez une base de connaissances pour guider ses réponses.
-          </p>
-        )}
-      </div>
-
-      {/* SECTION 2 : Clé API Gemini */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">🔑 Clé API Google Gemini (Gratuit)</div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Obtenez votre clé gratuite sur <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{color:'var(--accent-blue)'}}>aistudio.google.com/apikey</a></label>
-          <input className="form-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-            placeholder="AIza..." />
-        </div>
-      </div>
-
-      {/* SECTION 3 : Prompt système */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">🧠 Personnaliété de l'IA (System Prompt)</div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Décrivez ici le rôle, le ton et les instructions de l'agent</label>
-          <textarea className="form-textarea" rows="6" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
-            placeholder={`Exemple:\nTu es Sara, l'assistante commerciale d'Elite Digital Academy. Tu réponds en français, de façon chaleureuse et professionnelle.\nTu aide les clients à compléter leurs achats et tu réponds à leurs questions sur les formations.`} />
-        </div>
-      </div>
-
-      {/* SECTION 4 : Base de connaissances */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">📚 Base de Connaissances (FAQ)</div>
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>L'IA utilisera ces réponses pour répondre aux questions fréquentes.</p>
-
-        {knowledge.map((item, i) => (
-          <div key={i} style={{ background: 'var(--bg-lighter)', borderRadius: 8, padding: '10px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-            <div style={{ fontSize: 13 }}>
-              <div style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Q: {item.question}</div>
-              <div style={{ marginTop: 4 }}>R: {item.answer}</div>
-            </div>
-            <button onClick={() => deleteKnowledge(i)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-          </div>
-        ))}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-          <input className="form-input" placeholder="Question (ex: Quel est le prix du pack?)" value={newQ} onChange={e => setNewQ(e.target.value)} />
-          <input className="form-input" placeholder="Réponse de l'IA" value={newA} onChange={e => setNewA(e.target.value)} />
-          <button className="btn btn-secondary" onClick={addKnowledge} style={{ alignSelf: 'flex-start' }}>+ Ajouter</button>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? '⏳ Enregistrement...' : '💾 Sauvegarder l\'agent IA'}
+      {/* TABS */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button style={tabStyle('config')} onClick={() => setTab('config')}>⚙️ Configuration</button>
+        <button style={tabStyle('training')} onClick={() => setTab('training')}>
+          🧠 Entraînement {trainingExamples.length > 0 && <span style={{ background: 'rgba(255,255,255,0.3)', borderRadius: 10, padding: '1px 7px', marginLeft: 6, fontSize: 12 }}>{trainingExamples.length}</span>}
         </button>
+        <button style={tabStyle('convs')} onClick={() => { setTab('convs'); api('/api/ai-conversations').then(d => setConversations(d.conversations || [])); }}>💬 Conversations</button>
       </div>
 
-      {/* SECTION 5 : Conversations en cours */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">💬 Conversations en cours</div>
-          <button className="btn btn-secondary btn-sm" onClick={() => api('/api/ai-conversations').then(d => setConversations(d.conversations || []))}>Actualiser</button>
-        </div>
-        {conversations.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>Aucune conversation active pour le moment.</p>
-        ) : (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {conversations.map(conv => (
-              <div key={conv.jid}
-                onClick={() => setSelectedConv(selectedConv?.jid === conv.jid ? null : conv)}
-                style={{ padding: '8px 14px', background: selectedConv?.jid === conv.jid ? 'var(--accent-blue)' : 'var(--bg-lighter)', color: selectedConv?.jid === conv.jid ? '#fff' : 'inherit', borderRadius: 8, cursor: 'pointer' }}>
-                📱 {conv.phone} ({conv.messages.length} msgs)
-              </div>
-            ))}
+      {/* ===== TAB: CONFIG ===== */}
+      {tab === 'config' && (
+        <>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">Activation</div></div>
+            <div className="toggle-row">
+              <span style={{ fontSize: 14 }}>{enabled ? '✅ Agent IA activé' : '❌ Agent IA désactivé'}</span>
+              <button className={`toggle ${enabled ? 'active' : ''}`} onClick={() => setEnabled(!enabled)} />
+            </div>
           </div>
-        )}
 
-        {selectedConv && (
-          <div style={{ marginTop: 16, maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {selectedConv.messages.map((m, i) => (
-              <div key={i} style={{
-                textAlign: m.role === 'user' ? 'left' : 'right',
-                padding: '8px 12px',
-                background: m.role === 'user' ? 'var(--bg-lighter)' : 'rgba(59,130,246,0.15)',
-                borderRadius: 10,
-                maxWidth: '80%',
-                alignSelf: m.role === 'user' ? 'flex-start' : 'flex-end',
-                fontSize: 13
-              }}>
-                <div style={{ fontWeight: 600, fontSize: 11, marginBottom: 3, color: 'var(--text-muted)' }}>
-                  {m.role === 'user' ? '👤 Client' : '🤖 Agent IA'}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">🔑 Clé API Gemini (Gratuit)</div></div>
+            <div className="form-group">
+              <label className="form-label">→ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>aistudio.google.com/apikey</a></label>
+              <input className="form-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AIza..." />
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">🎭 Personnalité de l'IA</div></div>
+            <div className="form-group">
+              <label className="form-label">Décrivez le rôle et le ton de votre agent</label>
+              <textarea className="form-textarea" rows="5" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
+                placeholder="Ex: Tu es Sara, assistante d'Elite Digital Academy. Tu réponds en français, de façon chaleureuse..." />
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">📚 FAQ (réponses fixes)</div></div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Pour les infos précises que l'IA doit toujours donner exactement (prix, lien, etc.)</p>
+            {knowledge.map((item, i) => (
+              <div key={i} style={{ background: 'var(--bg-lighter)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Q: {item.question}</div>
+                  <div>R: {item.answer}</div>
                 </div>
-                {m.parts[0].text}
+                <button onClick={() => deleteKnowledge(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+              <input className="form-input" placeholder="Question" value={newQ} onChange={e => setNewQ(e.target.value)} />
+              <input className="form-input" placeholder="Réponse exacte" value={newA} onChange={e => setNewA(e.target.value)} />
+              <button className="btn btn-secondary" onClick={addKnowledge} style={{ alignSelf: 'flex-start' }}>+ Ajouter</button>
+            </div>
+          </div>
+
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? '⏳...' : '💾 Sauvegarder'}
+          </button>
+        </>
+      )}
+
+      {/* ===== TAB: TRAINING ===== */}
+      {tab === 'training' && (
+        <>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">📲 Importer une conversation WhatsApp exportée</div></div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Dans WhatsApp → ouvrez une conversation → ⋮ → "Exporter la discussion" → sans médias → copiez-collez le texte ici
+            </p>
+            <textarea className="form-textarea" rows="6" value={waExport} onChange={e => setWaExport(e.target.value)}
+              placeholder={"[28/03/2026, 14:23] Client: Bonjour, c'est combien le pack?\n[28/03/2026, 14:24] Vous: Bonjour ! Le pack est à 25 000 FCFA..."} />
+            <button className="btn btn-primary" onClick={importWhatsApp} disabled={importing || !waExport.trim()} style={{ marginTop: 10 }}>
+              {importing ? '⏳ Import en cours...' : '⬆️ Importer et entraîner l\'IA'}
+            </button>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><div className="card-title">✏️ Ajouter un exemple manuellement</div></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea className="form-textarea" rows="2" placeholder="Message du client..." value={manualIn} onChange={e => setManualIn(e.target.value)} />
+              <textarea className="form-textarea" rows="2" placeholder="Votre réponse idéale..." value={manualOut} onChange={e => setManualOut(e.target.value)} />
+              <button className="btn btn-secondary" onClick={addManualExample} style={{ alignSelf: 'flex-start' }}>+ Ajouter cet exemple</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">🧠 Exemples enregistrés ({trainingExamples.length}/50)</div>
+            </div>
+            {trainingExamples.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>Aucun exemple. Importez une conversation ou ajoutez-en un manuellement.</p>
+            ) : trainingExamples.map((ex, i) => (
+              <div key={i} style={{ borderBottom: '1px solid var(--bg-lighter)', padding: '10px 0', display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 13, flex: 1 }}>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>👤 {ex.input}</div>
+                  <div style={{ color: 'var(--text-secondary)' }}>🤖 {ex.output}</div>
+                </div>
+                <button onClick={() => deleteExample(i)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 16, alignSelf: 'flex-start' }}>✕</button>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </>
+      )}
+
+      {/* ===== TAB: CONVERSATIONS ===== */}
+      {tab === 'convs' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">💬 Conversations en direct</div>
+            <button className="btn btn-secondary btn-sm" onClick={() => api('/api/ai-conversations').then(d => setConversations(d.conversations || []))}>🔄 Actualiser</button>
+          </div>
+          {conversations.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 32 }}>Aucune conversation active pour le moment.</p>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+              {conversations.map(conv => (
+                <div key={conv.jid} onClick={() => setSelectedConv(selectedConv?.jid === conv.jid ? null : conv)}
+                  style={{ padding: '8px 14px', background: selectedConv?.jid === conv.jid ? 'var(--accent-blue)' : 'var(--bg-lighter)', color: selectedConv?.jid === conv.jid ? '#fff' : 'inherit', borderRadius: 8, cursor: 'pointer' }}>
+                  📱 {conv.phone} ({conv.messages.length} msgs)
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedConv && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 440, overflowY: 'auto' }}>
+              {selectedConv.messages.map((m, i) => {
+                const isAI = m.role === 'model';
+                const prevMsg = i > 0 ? selectedConv.messages[i - 1] : null;
+                const pairKey = `${selectedConv.jid}_${i}`;
+                const learned = learnedIdx.has(pairKey);
+                return (
+                  <div key={i} style={{ alignSelf: isAI ? 'flex-end' : 'flex-start', maxWidth: '78%' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, textAlign: isAI ? 'right' : 'left' }}>
+                      {isAI ? '🤖 Agent IA' : '👤 Client'}
+                    </div>
+                    <div style={{ padding: '9px 13px', background: isAI ? 'rgba(59,130,246,0.18)' : 'var(--bg-lighter)', borderRadius: 10, fontSize: 13 }}>
+                      {m.parts[0].text}
+                    </div>
+                    {isAI && prevMsg && (
+                      <button onClick={() => learnFromMsg(prevMsg.parts[0].text, m.parts[0].text, pairKey)}
+                        disabled={learned}
+                        style={{ marginTop: 4, background: 'none', border: `1px solid ${learned ? 'var(--accent-green)' : 'var(--accent-blue)'}`, color: learned ? 'var(--accent-green)' : 'var(--accent-blue)', borderRadius: 6, padding: '2px 10px', fontSize: 11, cursor: learned ? 'default' : 'pointer', float: 'right' }}>
+                        {learned ? '✅ Appris !' : '👍 Apprendre de ça'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
