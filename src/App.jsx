@@ -569,7 +569,7 @@ function ProductMessagesPage({ config, onSave, toast }) {
     }
     const updated = {
       ...products,
-      [name]: { text: '', image_url: '', audio_url: '', ad_text: '', ad_image: '', ad_audio: '' }
+      [name]: { text: '', image_url: '', audio_url: '', ad_text: '', ad_image: '', ad_audio: '', ad_keywords: '' }
     };
     setProducts(updated);
     setSelectedProduct(name);
@@ -698,11 +698,22 @@ function ProductMessagesPage({ config, onSave, toast }) {
               <div className="card-header">
                 <div className="card-title">🚀 Premier message Prospect (Pub Facebook)</div>
               </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
                 Renvoyé instantanément (à la place de l'IA) quand un client clique sur la pub Facebook portant ce nom exact. L'IA prendra le relais ensuite.
               </p>
               
               <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--accent-blue)' }}>🔑 Comment identifier cette pub ? (Texte ou Mots-clés)</label>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Pour les pubs boostées sans titre, entrez une phrase unique du texte de la pub (ex: <i>"TON TÉLÉPHONE EST UNE MINE D'OR"</i>). Le bot cherchera ce texte. Laissez vide pour utiliser le nom du produit par défaut ({selectedProduct}).
+                </div>
+                <input className="form-input" 
+                  value={products[selectedProduct].ad_keywords || ''} 
+                  onChange={e => updateSelectedProduct('ad_keywords', e.target.value)} 
+                  placeholder={`Mots-clés ou phrase exacte de la pub...`} />
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Texte de prospection</label>
                 <textarea className="form-textarea" rows="4"
                   value={products[selectedProduct].ad_text || ''} 
