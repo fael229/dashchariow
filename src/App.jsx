@@ -569,7 +569,7 @@ function ProductMessagesPage({ config, onSave, toast }) {
     }
     const updated = {
       ...products,
-      [name]: { text: '', image_url: '', audio_url: '' }
+      [name]: { text: '', image_url: '', audio_url: '', ad_text: '', ad_image: '', ad_audio: '' }
     };
     setProducts(updated);
     setSelectedProduct(name);
@@ -657,38 +657,80 @@ function ProductMessagesPage({ config, onSave, toast }) {
 
       {selectedProduct && products[selectedProduct] && (
         <div className="grid-2" style={{ marginTop: 16 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Message pour: {selectedProduct}</div>
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Texte du message</label>
-              <textarea className="form-textarea" rows="8"
-                value={products[selectedProduct].text || ''} 
-                onChange={e => updateSelectedProduct('text', e.target.value)}
-                placeholder="Utilisez {prenom}, {produit}, {montant}, {email}, {entreprise}..." />
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* --- SECTION 1 : VENTE REUSSIE --- */}
+            <div>
+              <div className="card-header">
+                <div className="card-title">✅ Message après achat (Webhook)</div>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Ce message est envoyé automatiquement quand le client achète cet article.</p>
+              
+              <div className="form-group">
+                <label className="form-label">Texte du message</label>
+                <textarea className="form-textarea" rows="4"
+                  value={products[selectedProduct].text || ''} 
+                  onChange={e => updateSelectedProduct('text', e.target.value)}
+                  placeholder="Utilisez {prenom}, {produit}, {montant}, {email}, {entreprise}..." />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">URL Image</label>
+                  <input className="form-input" 
+                    value={products[selectedProduct].image_url || ''} 
+                    onChange={e => updateSelectedProduct('image_url', e.target.value)} 
+                    placeholder="Lien de l'image" />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">URL Audio</label>
+                  <input className="form-input" 
+                    value={products[selectedProduct].audio_url || ''} 
+                    onChange={e => updateSelectedProduct('audio_url', e.target.value)} 
+                    placeholder="Lien note vocale (.ogg)" />
+                </div>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">URL Image (Optionnel)</label>
-              <input className="form-input" 
-                value={products[selectedProduct].image_url || ''} 
-                onChange={e => updateSelectedProduct('image_url', e.target.value)} 
-                placeholder="Lien de l'image (Catbox.moe)" />
-            </div>
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)' }} />
 
-            <div className="form-group">
-              <label className="form-label">URL Audio (Optionnel)</label>
-              <input className="form-input" 
-                value={products[selectedProduct].audio_url || ''} 
-                onChange={e => updateSelectedProduct('audio_url', e.target.value)} 
-                placeholder="Lien de la note vocale (Catbox.moe ogg)" />
+            {/* --- SECTION 2 : PROSPECT PUB FACEBOOK --- */}
+            <div>
+              <div className="card-header">
+                <div className="card-title">🚀 Premier message Prospect (Pub Facebook)</div>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Renvoyé instantanément (à la place de l'IA) quand un client clique sur la pub Facebook portant ce nom exact. L'IA prendra le relais ensuite.
+              </p>
+              
+              <div className="form-group">
+                <label className="form-label">Texte de prospection</label>
+                <textarea className="form-textarea" rows="4"
+                  value={products[selectedProduct].ad_text || ''} 
+                  onChange={e => updateSelectedProduct('ad_text', e.target.value)}
+                  placeholder="Ex: Bonjour ! Bienvenue chez Elite Academy. Le pack est actuellement en promo..." />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">URL Image (Optionnel)</label>
+                  <input className="form-input" 
+                    value={products[selectedProduct].ad_image || ''} 
+                    onChange={e => updateSelectedProduct('ad_image', e.target.value)} 
+                    placeholder="Lien de l'image promo" />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">URL Audio (Optionnel)</label>
+                  <input className="form-input" 
+                    value={products[selectedProduct].ad_audio || ''} 
+                    onChange={e => updateSelectedProduct('ad_audio', e.target.value)} 
+                    placeholder="Lien de votre note vocale (.ogg)" />
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="card">
-            <div className="card-header"><div className="card-title">Aperçu pour le client</div></div>
+            <div className="card-header"><div className="card-title">Aperçu pour le client (Après achat)</div></div>
             <div className="msg-preview">{preview(products[selectedProduct].text)}</div>
             
             {products[selectedProduct].image_url && (
