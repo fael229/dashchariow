@@ -46,6 +46,7 @@ function Sidebar({ page, setPage, status }) {
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'product_messages', icon: '🎁', label: 'Produits (Nouveau)' },
     { id: 'agent_ia', icon: '🤖', label: 'Agent IA' },
+    { id: 'integrations', icon: '🔌', label: 'Intégrations' },
     { id: 'media', icon: '📸', label: 'Médias' },
     { id: 'logs', icon: '📋', label: 'Logs' },
   ];
@@ -752,6 +753,52 @@ function ProductMessagesPage({ config, onSave, toast }) {
                   Si coché, une fois que la pub/audio sera envoyé, le bot ignorera totalement ce client et l'IA ne discutera pas avec lui.
                 </div>
               </div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '12px 0' }} />
+
+            {/* --- SECTION 3 : LIVRAISON GOOGLE DRIVE --- */}
+            <div>
+              <div className="card-header">
+                <div className="card-title">📁 Automatisation Google Drive</div>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Partage automatiquement ce dossier au client via son e-mail. Nécessite d'avoir ajouté vos Clés Google dans l'onglet Intégrations.
+              </p>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">Compte Google source</label>
+                <select 
+                  className="form-input" 
+                  value={products[selectedProduct].gdrive_account_id || ''} 
+                  onChange={e => updateSelectedProduct('gdrive_account_id', e.target.value)}
+                >
+                  <option value="">Sélectionnez un compte configuré...</option>
+                  {(config?.integrations?.google_accounts || []).map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">ID du Dossier ou Fichier Google (Optionnel)</label>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Ex: Dans <code>https://drive.google.com/drive/folders/16zLCQSlBpU...</code>, l'ID est <code>16zLCQSlBpU...</code>
+                </div>
+                <input className="form-input" 
+                  value={products[selectedProduct].gdrive_file_id || ''} 
+                  onChange={e => updateSelectedProduct('gdrive_file_id', e.target.value)} 
+                  placeholder="ID du dossier/fichier" />
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Message de l'e-mail d'invitation (Optionnel)</label>
+                <textarea className="form-textarea" rows="2"
+                  value={products[selectedProduct].gdrive_message || ''} 
+                  onChange={e => updateSelectedProduct('gdrive_message', e.target.value)}
+                  placeholder="Merci d'avoir payé cette formation..." />
+              </div>
+            </div>
+            
             </div>
           </div>
 
@@ -774,6 +821,95 @@ function ProductMessagesPage({ config, onSave, toast }) {
           {saving ? '⏳ Enregistrement...' : '💾 Sauvegarder les produits'}
         </button>
       </div>
+    </>
+  );
+}
+
+// === INTEGRATIONS PAGE ===
+function IntegrationsPage({ config, onSave }) {
+  const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (config?.integrations?.google_accounts) {
+      setGoogleAccounts(config.integrations.google_accounts);
+    } else if (config?.integrations?.google?.service_account) {
+      setGoogleAccounts([{ id: 'acc_0', name: 'Compte Principal', service_account: config.integrations.google.service_account }]);
+    }
+  }, [config]);
+
+  const addAccount = () => {
+    setGoogleAccounts([...googleAccounts, { id: 'acc_' + Date.now(), name: 'Nouveau compte Drive', service_account: '' }]);
+  };
+
+  const updateAccount = (id, field, value) => {
+    setGoogleAccounts(googleAccounts.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
+
+  const deleteAccount = (id) => {
+    setGoogleAccounts(googleAccounts.filter(a => a.id !== id));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      integrations: {
+        ...(config.integrations || {}),
+        google_accounts: googleAccounts
+      }
+    });
+    setSaving(false);
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>🔌 Intégrations API</h2>
+        <p>Connectez vos services externes (Google Drive, Chariow, etc) à ChariBot</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">📁 Comptes Google Drive (Livraison Automatique)</div>
+          <button className="btn btn-secondary btn-sm" onClick={addAccount}>+ Ajouter un compte</button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Ajoutez les <strong>clés de compte de service Google Cloud</strong> (fichiers JSON complets) pour donner au bot l'accès à vos Google Drive, même s'ils sont hébergés sur des adresses e-mails différentes.
+        </p>
+        
+        {googleAccounts.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun compte configuré.</p>}
+        {googleAccounts.map(acc => (
+          <div key={acc.id} style={{ border: '1px solid var(--border-color)', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <input 
+                className="form-input" 
+                value={acc.name} 
+                onChange={e => updateAccount(acc.id, 'name', e.target.value)}
+                placeholder="Nom (ex: Drive Elite Academy)"
+                style={{ fontWeight: 'bold' }}
+              />
+              <button className="btn btn-danger btn-sm" onClick={() => deleteAccount(acc.id)} style={{ marginLeft: 8 }}>✖ Supprimer</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Contenu brut du fichier credentials.json</label>
+              <textarea 
+                className="form-textarea" 
+                rows="4" 
+                value={acc.service_account} 
+                onChange={e => updateAccount(acc.id, 'service_account', e.target.value)}
+                placeholder='{ "type": "service_account", "project_id": "...", "private_key": "-----BEGIN PRIVATE KEY-----\n..." }' 
+              />
+              {acc.service_account && !acc.service_account.includes('private_key') && (
+                <p style={{ color: 'var(--accent-red)', fontSize: 12, marginTop: 4 }}>⚠️ Le JSON copié semble invalide. Assurez-vous d'avoir copié le fichier entier (il doit contenir private_key).</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+        {saving ? '⏳...' : '💾 Sauvegarder les intégrations'}
+      </button>
     </>
   );
 }
@@ -1314,6 +1450,9 @@ export default function App() {
         )}
         {page === 'agent_ia' && (
           <AgentIAPage config={config} onSave={handleSaveConfig} />
+        )}
+        {page === 'integrations' && (
+          <IntegrationsPage config={config} onSave={handleSaveConfig} />
         )}
         {page === 'media' && (
           <MediaPage config={config} onSave={handleSaveConfig} toast={showToast} />
