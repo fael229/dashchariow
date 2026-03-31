@@ -521,7 +521,7 @@ body {
 }
 
 /* Mobile */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   /* Bottom Navigation Bar for Mobile */
   .app { flex-direction: column; }
   .sidebar { 
