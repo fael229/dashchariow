@@ -569,7 +569,7 @@ function ProductMessagesPage({ config, onSave, toast }) {
     }
     const updated = {
       ...products,
-      [name]: { text: '', image_url: '', audio_url: '', ad_text: '', ad_image: '', ad_audio: '', ad_keywords: '' }
+      [name]: { text: '', image_url: '', audio_url: '', ad_text: '', ad_image: '', ad_audio: '', ad_keywords: '', ad_stop_ai: false }
     };
     setProducts(updated);
     setSelectedProduct(name);
@@ -735,6 +735,21 @@ function ProductMessagesPage({ config, onSave, toast }) {
                     value={products[selectedProduct].ad_audio || ''} 
                     onChange={e => updateSelectedProduct('ad_audio', e.target.value)} 
                     placeholder="Lien de votre note vocale (.ogg)" />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={products[selectedProduct].ad_stop_ai || false} 
+                    onChange={e => updateSelectedProduct('ad_stop_ai', e.target.checked)} 
+                    style={{ width: 16, height: 16 }} 
+                  />
+                  <span>🔴 Ne pas laisser l'IA répondre par la suite (Je prends le relais manuellement)</span>
+                </label>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 24, marginTop: 4 }}>
+                  Si coché, une fois que la pub/audio sera envoyé, le bot ignorera totalement ce client et l'IA ne discutera pas avec lui.
                 </div>
               </div>
             </div>
