@@ -820,6 +820,7 @@ function LogsPage({ logs, onRefresh }) {
 function AgentIAPage({ config, onSave }) {
   const [tab, setTab] = useState('config');
   const [enabled, setEnabled] = useState(false);
+  const [triggerMode, setTriggerMode] = useState('all');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -843,6 +844,7 @@ function AgentIAPage({ config, onSave }) {
   useEffect(() => {
     if (config?.ai_agent) {
       setEnabled(config.ai_agent.enabled || false);
+      setTriggerMode(config.ai_agent.trigger_mode || 'all');
       setApiKey(config.ai_agent.api_key || '');
       setSystemPrompt(config.ai_agent.system_prompt || '');
       setKnowledge(config.ai_agent.knowledge_base || []);
@@ -853,7 +855,7 @@ function AgentIAPage({ config, onSave }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave({ ai_agent: { enabled, api_key: apiKey, system_prompt: systemPrompt, knowledge_base: knowledge } });
+    await onSave({ ai_agent: { enabled, trigger_mode: triggerMode, api_key: apiKey, system_prompt: systemPrompt, knowledge_base: knowledge } });
     setSaving(false);
   };
 
@@ -966,6 +968,19 @@ function AgentIAPage({ config, onSave }) {
               <span style={{ fontSize: 14 }}>{enabled ? '✅ Agent IA activé' : '❌ Agent IA désactivé'}</span>
               <button className={`toggle ${enabled ? 'active' : ''}`} onClick={() => setEnabled(!enabled)} />
             </div>
+            
+            {enabled && (
+               <div className="form-group" style={{marginTop: 16}}>
+                 <label className="form-label" style={{ color: 'var(--accent-blue)' }}>🎯 Cible de l'Agent IA</label>
+                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                   Choisissez avec qui l'IA a le droit de discuter :
+                 </div>
+                 <select className="form-input" value={triggerMode} onChange={e => setTriggerMode(e.target.value)}>
+                   <option value="all">🌍 Répondre à TOUT LE MONDE (toutes les discussions)</option>
+                   <option value="fb_ads_only">Facebook Répondre UNIQUEMENT aux clients venant des pubs Facebook</option>
+                 </select>
+               </div>
+            )}
           </div>
 
           <div className="card" style={{ marginBottom: 16 }}>
