@@ -951,11 +951,12 @@ function LogsPage({ logs, onRefresh }) {
                     <td>{new Date(log.timestamp).toLocaleString('fr-FR')}</td>
                     <td>
                       {log.type === 'successful_sale' ? '✅ Vente' :
-                       log.type === 'abandoned_sale' ? '🛒 Abandon' : '📤 Manuel'}
+                       log.type === 'abandoned_sale' ? '🛒 Abandon' : 
+                       log.type === 'gdrive_share' ? '📁 G.Drive' : '📤 Manuel'}
                     </td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{log.to}</td>
                     <td>{log.product || '—'}</td>
-                    <td><span className={`badge ${log.status}`}>{log.status === 'sent' ? '✅ Envoyé' : '❌ Échoué'}</span></td>
+                    <td><span className={`badge ${log.status}`} title={log.error || log.details || ''}>{log.status === 'sent' ? '✅ Succès' : '❌ Échoué'}</span></td>
                   </tr>
                 ))}
               </tbody>
