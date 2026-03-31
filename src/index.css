@@ -532,18 +532,35 @@ body {
     width: 100%; 
     height: 64px; 
     flex-direction: row; 
-    padding: 0 8px; 
+    align-items: center;
+    padding: 0; 
     border-right: none; 
     border-top: 1px solid var(--border); 
+    background: var(--bg-secondary);
     z-index: 1000;
   }
   .sidebar-brand { display: none; }
   /* Make nav scrollable horizontally on very small screens */
-  .sidebar-nav { flex-direction: row; justify-content: flex-start; width: 100%; gap: 4px; margin: 0; overflow-x: auto; padding-bottom: 4px; }
-  .nav-item { padding: 8px; width: auto; border-radius: 8px; flex-shrink: 0; }
-  .nav-item.active { background: transparent; color: var(--accent-green); }
+  .sidebar-nav { 
+    display: flex;
+    flex-direction: row; 
+    justify-content: space-between; 
+    align-items: center;
+    width: 100%; 
+    height: 100%;
+    gap: 8px; 
+    margin: 0; 
+    padding: 0 16px;
+    overflow-x: auto; 
+    /* Hide scrollbar logically */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .nav-item { padding: 10px 12px; width: auto; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .nav-item.active { background: var(--accent-green-dim); color: var(--accent-green); }
   
-  .main-content { margin-left: 0; margin-bottom: 64px; padding: 16px; min-height: calc(100vh - 64px); }
+  .main-content { margin-left: 0; padding: 16px; padding-bottom: 90px; min-height: 100vh; }
   
   .page-header { margin-bottom: 24px; }
   .page-header h2 { font-size: 24px; }
