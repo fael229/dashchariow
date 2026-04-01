@@ -554,6 +554,44 @@ function ProductMessagesPage({ config, onSave, toast }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Simulation states
+  const [simProduct, setSimProduct] = useState('');
+  const [simPhone, setSimPhone] = useState('');
+  const [simEmail, setSimEmail] = useState('');
+  const [simEvent, setSimEvent] = useState('successful.sale');
+  const [simulating, setSimulating] = useState(false);
+
+  useEffect(() => {
+    if (!simProduct && Object.keys(products).length > 0) {
+      setSimProduct(Object.keys(products)[0]);
+    }
+  }, [products]);
+
+  const handleSimulate = async () => {
+    if (!simPhone || !simProduct) {
+      toast('❌ Remplissez le numéro et choisissez un produit', 'error');
+      return;
+    }
+    setSimulating(true);
+    try {
+      const payload = {
+        event: simEvent,
+        data: {
+          customer: { name: 'Testeur ChariBot', phone: simPhone, email: simEmail || 'test@example.com' },
+          product: { name: simProduct, price: 9999 },
+          payment: { amount: { value: 9999, currency: 'XOF' } }
+        }
+      };
+      
+      const res = await api('/webhook/chariow', { method: 'POST', body: JSON.stringify(payload) });
+      if (res.success) toast('✅ Simulation réussie ! Vérifiez vos logs WhatsApp.');
+      else toast('❌ Erreur du bot : ' + (res.error || 'Erreur pendant l\'envoi'), 'error');
+    } catch (e) {
+      toast('❌ Impossible de joindre le bot en local', 'error');
+    }
+    setSimulating(false);
+  };
+
   useEffect(() => {
     if (config) {
       setProducts(config.product_messages || {});
@@ -819,6 +857,46 @@ function ProductMessagesPage({ config, onSave, toast }) {
       <div style={{ marginTop: 16 }}>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
           {saving ? '⏳ Enregistrement...' : '💾 Sauvegarder les produits'}
+        </button>
+      </div>
+
+      <hr style={{ margin: '32px 0', border: 'none', borderTop: '2px dashed var(--border-color)' }} />
+      
+      <div className="card" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--accent-orange)' }}>
+        <div className="card-header">
+          <div className="card-title" style={{ color: 'var(--accent-orange)' }}>🧪 Simuler un événement Chariow</div>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Envoyez un faux Webhook au bot pour tester l'envoi WhatsApp et le partage Google Drive en conditions réelles, sans devoir faire un vrai achat sur Chariow.
+        </p>
+        
+        <div className="grid-2">
+          <div className="form-group">
+            <label className="form-label">Événement à simuler</label>
+            <select className="form-input" value={simEvent} onChange={e => setSimEvent(e.target.value)}>
+              <option value="successful.sale">✅ Vente Réussie (Envoi + Google Drive)</option>
+              <option value="abandoned.sale">🛒 Panier Abandonné</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Produit concerné</label>
+            <select className="form-input" value={simProduct} onChange={e => setSimProduct(e.target.value)}>
+              <option value="">-- Choisir un produit configuré --</option>
+              {Object.keys(products).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Numéro WhatsApp (Receveur)</label>
+            <input className="form-input" placeholder="ex: 22912345678" value={simPhone} onChange={e => setSimPhone(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">E-mail (Pour tester Google Drive)</label>
+            <input className="form-input" placeholder="votre_email_perso@gmail.com" value={simEmail} onChange={e => setSimEmail(e.target.value)} />
+          </div>
+        </div>
+
+        <button className="btn" style={{ background: 'var(--accent-orange)', color: '#000', marginTop: 16, border: 'none', fontWeight: 600 }} onClick={handleSimulate} disabled={simulating}>
+          {simulating ? '⏳ Exécution...' : '🚀 Lancer la simulation'}
         </button>
       </div>
     </>
