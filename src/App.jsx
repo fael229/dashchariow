@@ -45,6 +45,7 @@ function Sidebar({ page, setPage, status }) {
     { id: 'analytics', icon: '📈', label: 'Analytics' },
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'product_messages', icon: '🎁', label: 'Produits (Nouveau)' },
+    { id: 'broadcast', icon: '📢', label: 'Diffusion' },
     { id: 'agent_ia', icon: '🤖', label: 'Agent IA' },
     { id: 'integrations', icon: '🔌', label: 'Intégrations' },
     { id: 'media', icon: '📸', label: 'Médias' },
@@ -1436,7 +1437,201 @@ function LoginPage({ onLogin }) {
 }
 
 // === MAIN APP ===
-export default function App() {
+export default App;
+
+// === BROADCAST PAGE ===
+function BroadcastPage() {
+  const [numbersStr, setNumbersStr] = useState('');
+  const [message, setMessage] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [audioUrl, setAudioUrl] = useState('');
+  const [delaySec, setDelaySec] = useState(15);
+  
+  const [status, setStatus] = useState('idle'); // idle, running, stopped, finished
+  const [results, setResults] = useState([]);
+  
+  // To allow stopping loop during execution
+  const stopFlag = useRef(false);
+
+  const startBroadcast = async () => {
+    // Nettoyage et extraction de numéros
+    const rawNumbers = numbersStr.split(/\n|,|;/).map(n => n.trim()).filter(n => n.length > 5);
+    const uniqueNumbers = [...new Set(rawNumbers)]; // Suppression des doublons
+    
+    if (uniqueNumbers.length === 0) return toast('Entrez au moins un numéro valide', 'error');
+    if (!message) return toast('Le texte du message est obligatoire', 'error');
+
+    setStatus('running');
+    stopFlag.current = false;
+    
+    // Initialisation du tableau des résultats
+    setResults(uniqueNumbers.map(n => ({ phone: n, state: 'pending', error: '' })));
+
+    for (let i = 0; i < uniqueNumbers.length; i++) {
+      if (stopFlag.current) {
+        setStatus('stopped');
+        break;
+      }
+      
+      const phone = uniqueNumbers[i];
+      
+      // Mettre le statut à "En cours..."
+      setResults(prev => prev.map(r => r.phone === phone ? { ...r, state: 'sending' } : r));
+      
+      let resSuccess = false;
+      let resError = '';
+      
+      try {
+        const payload = { phone, message, image_url: imageUrl, audio_url: audioUrl };
+        const res = await api('/send', { method: 'POST', body: JSON.stringify(payload) });
+        resSuccess = res.success;
+        resError = res.error || 'Erreur inconnue (Possiblement non sur WhatsApp)';
+      } catch (e) {
+        resSuccess = false;
+        resError = 'Serveur inaccessible';
+      }
+
+      setResults(prev => prev.map(r => r.phone === phone ? { ...r, state: resSuccess ? 'success' : 'error', error: resError } : r));
+      
+      // Si on arrête au milieu
+      if (stopFlag.current) {
+        setStatus('stopped');
+        break;
+      }
+
+      // Attendre X secondes (sauf pour le tout dernier)
+      if (i < uniqueNumbers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
+      }
+    }
+    
+    if (!stopFlag.current) setStatus('finished');
+  };
+
+  const stopBroadcast = () => {
+    stopFlag.current = true;
+    setStatus('stopped');
+  };
+
+  const pendingCount = results.filter(r => r.state === 'pending' || r.state === 'sending').length;
+  const successCount = results.filter(r => r.state === 'success').length;
+  const errorCount = results.filter(r => r.state === 'error').length;
+  const total = results.length;
+  const progressPct = total === 0 ? 0 : Math.round(((successCount + errorCount) / total) * 100);
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>📢 Diffusion Intelligente</h2>
+        <p>Envoyez un message (texte/audio/image) groupé à une liste de contacts personnels ou une base de données avec des délais anti-bloquage.</p>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header"><div className="card-title">1. Configuration du message</div></div>
+          
+          <div className="form-group">
+            <label className="form-label">Liste des numéros</label>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Un numéro par ligne, séparés par Entrée (ou copiez-collez d'Excel).</div>
+            <textarea className="form-textarea" rows="6" value={numbersStr} onChange={e => setNumbersStr(e.target.value)} disabled={status === 'running'} placeholder="22912345678&#10;+33600000000&#10;..." />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Texte du message</label>
+            <textarea className="form-textarea" rows="4" value={message} onChange={e => setMessage(e.target.value)} disabled={status === 'running'} placeholder="Texte obligatoire. Ex: Bonjour, voici notre nouvelle offre..." />
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Image (Optionnel)</label>
+              <input className="form-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} disabled={status === 'running'} placeholder="URL de l'image" />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Note Vocale (Optionnel)</label>
+              <input className="form-input" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} disabled={status === 'running'} placeholder="URL du fichier audio (.ogg)" />
+            </div>
+          </div>
+          
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label className="form-label">Délai entre chaque envoi (Anti-Ban)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input type="range" min="1" max="60" value={delaySec} onChange={e => setDelaySec(parseInt(e.target.value))} style={{ flex: 1 }} disabled={status === 'running'} />
+              <span style={{ fontWeight: 'bold', width: '60px' }}>{delaySec} sec</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              WhatsApp bloque vite les envois agressifs. Gardez au moins 10-15 secondes si +100 numéros.
+            </div>
+          </div>
+
+          <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+            {status !== 'running' ? (
+              <button className="btn btn-primary" style={{ flex: 1, background: 'var(--accent-orange)', color: '#000', border: 'none' }} onClick={startBroadcast}>
+                🚀 Lancer la diffusion
+              </button>
+            ) : (
+              <button className="btn btn-danger" style={{ flex: 1 }} onClick={stopBroadcast}>
+                🛑 Arrêter d'urgence
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-title">2. Suivi en temps réel</div></div>
+          
+          {total > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
+                 <span>Progression : <b>{successCount + errorCount}</b> / {total}</span>
+                 <span style={{ color: 'var(--accent-orange)' }}>{progressPct}%</span>
+              </div>
+              <div style={{ height: 8, background: 'var(--bg-dark)', borderRadius: 4, overflow: 'hidden' }}>
+                 <div style={{ height: '100%', width: `${progressPct}%`, background: 'var(--accent-orange)', transition: 'width 0.3s' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12 }}>
+                 <div style={{ color: 'var(--accent-green)' }}>✅ {successCount} Succès</div>
+                 <div style={{ color: 'var(--accent-red)' }}>❌ {errorCount} Échecs</div>
+                 {status === 'running' && <div style={{ color: 'var(--accent-blue)', animation: 'pulse 1.5s infinite' }}>⏳ En cours...</div>}
+                 {status === 'stopped' && <div style={{ color: 'var(--accent-red)' }}>🛑 Stoppé</div>}
+                 {status === 'finished' && <div style={{ color: 'var(--accent-green)' }}>🏆 Terminé !</div>}
+              </div>
+              {status === 'running' && (
+                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent-red)', fontWeight: 'bold' }}>
+                   ⚠️ LAISSEZ CETTE PAGE OUVERTE TANT QUE C'EST EN COURS.
+                 </div>
+              )}
+            </div>
+          )}
+
+          {total === 0 ? (
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '40px 0' }}>Aucune diffusion en cours.</p>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <table className="log-table">
+                <thead><tr><th>Numéro</th><th>Statut</th></tr></thead>
+                <tbody>
+                  {results.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ fontFamily: 'monospace' }}>{r.phone}</td>
+                      <td>
+                         {r.state === 'pending' && <span style={{ color: 'var(--text-muted)' }}>En attente</span>}
+                         {r.state === 'sending' && <span style={{ color: 'var(--accent-blue)' }}>Envoi...</span>}
+                         {r.state === 'success' && <span className="badge sent">✅ Envoyé</span>}
+                         {r.state === 'error' && <span className="badge failed" title={r.error}>❌ Échoué</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [page, setPage] = useState('dashboard');
   const [status, setStatus] = useState('disconnected');
@@ -1553,6 +1748,9 @@ export default function App() {
         )}
         {page === 'agent_ia' && (
           <AgentIAPage config={config} onSave={handleSaveConfig} />
+        )}
+        {page === 'broadcast' && (
+          <BroadcastPage />
         )}
         {page === 'integrations' && (
           <IntegrationsPage config={config} onSave={handleSaveConfig} />
