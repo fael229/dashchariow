@@ -242,6 +242,7 @@ function AnalyticsPage() {
   const [dateRange, setDateRange] = useState('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [manualSpend, setManualSpend] = useState('');
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -274,7 +275,12 @@ function AnalyticsPage() {
   if (loading && !data) return <div style={{ padding: 40, textAlign: 'center' }}>⏳ Chargement des données...</div>;
   if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>Aucune donnée disponible.</div>;
 
-  const { chariow, facebook, roas, roi_net } = data;
+  const { chariow, facebook } = data;
+  
+  // Utiliser la saisie manuelle si remplie, sinon API (si existante)
+  const actualSpend = manualSpend !== '' && !isNaN(manualSpend) ? parseFloat(manualSpend) : (facebook?.spend || 0);
+  const roas = actualSpend > 0 ? (chariow.revenue / actualSpend).toFixed(2) : 0;
+  const roi_net = chariow.revenue - actualSpend;
 
   return (
     <>
@@ -282,7 +288,7 @@ function AnalyticsPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <h2>Analytics (Tracker ROAS)</h2>
-            <p>Synchronisation en direct avec Chariow et Facebook Ads</p>
+            <p>Synchronisation en direct avec Chariow et calcul automatique</p>
           </div>
           
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -308,6 +314,20 @@ function AnalyticsPage() {
           </div>
         </div>
       </div>
+
+      <div className="card" style={{ marginBottom: 24, padding: 16, background: 'rgba(255, 75, 43, 0.04)', border: '1px dashed var(--accent-orange)' }}>
+         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 250 }}>
+               <strong style={{ display: 'block', marginBottom: 4 }}>⚠️ Connexion Facebook API Impossible / Bloquée ?</strong>
+               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Regardez votre application Facebook Ads sur votre téléphone et saisissez manuellement la dépense publicitaire de la période sélectionnée pour ajuster automatiquement le ROAS ci-dessous.</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+               <input type="number" className="form-input" style={{ width: 140, background: 'white' }} placeholder="Dépense FB..." value={manualSpend} onChange={e => setManualSpend(e.target.value)} />
+               <span style={{ fontWeight: 'bold', fontSize: 16 }}>{chariow.currency}</span>
+            </div>
+         </div>
+      </div>
+
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card" style={{ borderTop: '3px solid #00f2fe' }}>
           <div className="stat-icon" style={{ background: '#00f2fe22' }}>💰</div>
@@ -319,7 +339,7 @@ function AnalyticsPage() {
         <div className="stat-card" style={{ borderTop: '3px solid #ff4b2b' }}>
           <div className="stat-icon" style={{ background: '#ff4b2b22' }}>💸</div>
           <div>
-            <div className="stat-value">{facebook.spend.toLocaleString()} {chariow.currency}</div>
+            <div className="stat-value">{actualSpend.toLocaleString()} {chariow.currency}</div>
             <div className="stat-label">Dépense (Facebook Ads)</div>
           </div>
         </div>
