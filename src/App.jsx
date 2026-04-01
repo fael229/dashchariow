@@ -279,8 +279,12 @@ function AnalyticsPage() {
   
   // Utiliser la saisie manuelle si remplie, sinon API (si existante)
   const actualSpend = manualSpend !== '' && !isNaN(manualSpend) ? parseFloat(manualSpend) : (facebook?.spend || 0);
-  const roas = actualSpend > 0 ? (chariow.revenue / actualSpend).toFixed(2) : 0;
-  const roi_net = chariow.revenue - actualSpend;
+  
+  // Déduction automatique de 15% de frais sur le CA Chariow
+  const netRevenue = chariow.revenue * 0.85;
+
+  const roas = actualSpend > 0 ? (netRevenue / actualSpend).toFixed(2) : 0;
+  const roi_net = netRevenue - actualSpend;
 
   return (
     <>
@@ -334,6 +338,9 @@ function AnalyticsPage() {
           <div>
             <div className="stat-value">{chariow.revenue.toLocaleString()} {chariow.currency}</div>
             <div className="stat-label">Chiffre d'Affaires Brut</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, fontWeight: 500 }}>
+              Net (-15%) : {Math.round(netRevenue).toLocaleString()} {chariow.currency}
+            </div>
           </div>
         </div>
         <div className="stat-card" style={{ borderTop: '3px solid #ff4b2b' }}>
