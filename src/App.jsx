@@ -576,16 +576,40 @@ function ProductMessagesPage({ config, onSave, toast }) {
     try {
       const payload = {
         event: simEvent,
-        data: {
-          customer: { name: 'Testeur ChariBot', phone: simPhone, email: simEmail || 'test@example.com' },
-          product: { name: simProduct, price: 9999 },
-          payment: { amount: { value: 9999, currency: 'XOF' } }
-        }
+        sale: {
+          id: 'sim_sale_' + Math.random().toString(36).substr(2, 9),
+          status: 'completed',
+          amount: { value: 9999, currency: 'XOF' }
+        },
+        product: {
+          id: 'sim_prod_' + Math.random().toString(36).substr(2, 9),
+          name: simProduct,
+          price: { value: 9999, currency: 'XOF' }
+        },
+        customer: {
+          id: 'sim_cust_' + Math.random().toString(36).substr(2, 9),
+          name: 'Testeur ChariBot',
+          first_name: 'Testeur',
+          last_name: 'ChariBot',
+          email: simEmail || 'test@example.com',
+          phone: simPhone,
+          country: 'XOF'
+        },
+        note: "Simulation déclenchée depuis le Dashboard"
       };
       
       const res = await api('/webhook/chariow', { method: 'POST', body: JSON.stringify(payload) });
-      if (res.success) toast('✅ Simulation réussie ! Vérifiez vos logs WhatsApp.');
-      else toast('❌ Erreur du bot : ' + (res.error || 'Erreur pendant l\'envoi'), 'error');
+      
+      if (res.success) {
+        toast('✅ Simulation réussie ! Vérifiez vos logs WhatsApp.');
+      } else {
+        const firstError = res.results?.[0]?.error || res.error || '';
+        if (firstError.includes('NOT_ON_WHATSAPP') || firstError.includes('Invalid phone')) {
+          toast('⚠️ Attention: Numéro WhatsApp introuvable (C\'est normal si c\'est un faux numéro). Vérifiez l\'onglet LOGS pour voir si Google Drive a marché !', 'error');
+        } else {
+          toast('❌ Échec de la simulation : ' + (firstError || 'Erreur inconnue'), 'error');
+        }
+      }
     } catch (e) {
       toast('❌ Impossible de joindre le bot en local', 'error');
     }
